@@ -135,8 +135,11 @@ async function checkForCode() {
 
     const res = await fetchWithAuth(`${GMAIL_API_URL}?maxResults=5&labelIds=INBOX`);
     const data = await res.json();
-
     const messages = data.messages || [];
+
+    let newestCode = null;
+    let newestTimestamp = 0;
+
     for (const msg of messages) {
       const detailRes = await fetchWithAuth(`${GMAIL_API_URL}/${msg.id}?format=full`);
       const msgData = await detailRes.json();
@@ -144,48 +147,59 @@ async function checkForCode() {
       const headers = msgData.payload.headers || [];
       const subject = headers.find(h => h.name === "Subject")?.value?.toLowerCase() || "";
       const from = headers.find(h => h.name === "From")?.value?.toLowerCase() || "";
+      const body = msgData.snippet || "";
+      const match = body.match(CODE_REGEX);
+      const internalTimestamp = parseInt(msgData.internalDate);
 
       const shouldCheck = COMMON_SUBJECTS.some(keyword => subject.includes(keyword)) ||
-        COMMON_SENDERS.some(sender => from.includes(sender));
+                          COMMON_SENDERS.some(sender => from.includes(sender));
 
-      if (shouldCheck) {
-        const body = msgData.snippet || "";
-        const match = body.match(CODE_REGEX);
-        if (match) {
-          const code = match[0];
-          const timestamp = Date.now();
-          await chrome.storage.local.set({ latestCode: { code, timestamp } });
-          updateIcon(true);
-          
-          // Show badge text
-          chrome.action.setBadgeText({ text: "NEW" });
-          chrome.action.setBadgeBackgroundColor({ color: "#d93025" }); // Red
-          
-          // Ask for permission if needed
-          if (Notification.permission === "default") {
-            Notification.requestPermission();
-          }
-          
-          // Show desktop notification if allowed
-          if (Notification.permission === "granted") {
-            chrome.notifications.create({
-              type: "basic",
-              iconUrl: "images/logo128.png",
-              title: "Password Pigeon",
-              message: `New code detected: ${code}`,
-              priority: 2
-            });
-          }
-          
-        }
+      if (shouldCheck && match && internalTimestamp > newestTimestamp) {
+        newestCode = match[0];
+        newestTimestamp = internalTimestamp;
       }
     }
+
+    if (newestCode) {
+      const stored = await chrome.storage.local.get(['latestCode', 'lastNotifiedCode']);
+      const lastSaved = stored.latestCode || {};
+      const lastNotified = stored.lastNotifiedCode || {};
+
+      // Check if the newest code is different from the last notified code
+      if (!lastNotified.code || lastNotified.code !== newestCode) {
+        await chrome.storage.local.set({ latestCode: { code: newestCode, timestamp: newestTimestamp } });
+
+        // Update the last notified code
+        await chrome.storage.local.set({ lastNotifiedCode: { code: newestCode, timestamp: Date.now() } });
+
+        updateIcon(true);
+        chrome.action.setBadgeText({ text: "NEW" });
+        chrome.action.setBadgeBackgroundColor({ color: "#d93025" });
+
+        if (Notification.permission === "default") {
+          Notification.requestPermission();
+        }
+        if (Notification.permission === "granted") {
+          chrome.notifications.create({
+            type: "basic",
+            iconUrl: "images/logo128.png",
+            title: "Password Pigeon",
+            message: `New code detected: ${newestCode}`,
+            priority: 2
+          });
+        }
+      } else {
+        console.log("No new code detected, notification not sent.");
+      }
+    }
+
   } catch (err) {
     console.error("Code check failed:", err.message);
   }
 
   isChecking = false;
 }
+
 
 // --- Alarm ---
 chrome.runtime.onInstalled.addListener(() => {
@@ -233,9 +247,16 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   
 
   if (request.action === "copyCode") {
-    navigator.clipboard.writeText(request.code)
-      .then(() => sendResponse({ success: true }))
-      .catch(() => sendResponse({ success: false }));
-    return true;
+    if (request.code) {
+        navigator.clipboard.writeText(request.code)
+            .then(() => sendResponse({ success: true }))
+            .catch(err => {
+                console.error("Failed to copy code:", err);
+                sendResponse({ success: false, error: "Clipboard write failed." });
+            });
+    } else {
+        sendResponse({ success: false, error: "No code provided." });
+    }
+    return true; // Keep the message channel open for the async response
   }
 });

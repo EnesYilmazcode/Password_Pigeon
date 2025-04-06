@@ -1,37 +1,51 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <title>Password Pigeon</title>
-    <link rel="stylesheet" href="style.css">
-    <meta charset="UTF-8">
+  <meta charset="UTF-8" />
+  <title>Password Pigeon</title>
+  <link rel="stylesheet" href="style.css" />
 </head>
 <body>
-    <div class="container">
-        <div class="header">
-            <img src="images/logo48.png" alt="Password Pigeon Logo" id="logo">
-            <h1>Password Pigeon</h1>
-        </div>
-
-        <div id="auth-section">
-            <p id="auth-status">Checking status...</p>
-            <button id="login-button" class="button">Sign In with Google</button>
-            <button id="logout-button" class="button logout-button" style="display: none;">Sign Out</button>
-        </div>
-
-        <div id="code-section" style="display: none;">
-            <h2>Latest Code:</h2>
-            <div id="code-display" class="code-box">
-                <span id="code-text">No code found yet.</span>
-                <button id="copy-button" class="button copy-button" title="Copy Code" disabled>
-                    <!-- SVG icon for copying -->
-                    <svg xmlns="http://www.w3.org/2000/svg" height="18" viewBox="0 0 24 24" width="18" fill="currentColor"><path d="M0 0h24v24H0V0z" fill="none"/><path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg>
-                </button>
-            </div>
-             <p id="code-timestamp" class="timestamp"></p>
-        </div>
-         <p id="error-message" class="error"></p>
-         <p id="info-message" class="info"></p>
+  <div class="container">
+    <div class="header">
+      <div class="logo-title">
+        <img src="images/logo48.png" alt="Logo" id="logo" />
+        <h1>Password Pigeon</h1>
+      </div>
+      <button id="logout-button" class="icon-button" title="Sign Out" style="display: none;">
+        ⎋
+      </button>
     </div>
-    <script src="popup.js"></script>
+
+    <div id="auth-section">
+      <p id="auth-status">Checking status...</p>
+      <button id="login-button" class="button full-width">Sign In with Google</button>
+    </div>
+
+    <div id="code-section" style="display: none;">
+      <h2>Latest Code</h2>
+      <div class="code-box">
+        <span id="code-text">No code found yet.</span>
+        <button id="copy-button" class="copy-button" title="Copy Code" disabled>
+          📋
+        </button>
+      </div>
+      <p id="code-timestamp" class="timestamp"></p>
+    </div>
+
+    <p id="error-message" class="error"></p>
+    <p id="info-message" class="info"></p>
+
+    <div id="history-container">
+      <h2>Code History</h2>
+      <ul id="history-list"></ul>
+      <div class="history-controls">
+        <button id="clear-history" class="button">Clear</button>
+        <button id="view-history" class="button">View All</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="popup.js"></script>
 </body>
 </html>

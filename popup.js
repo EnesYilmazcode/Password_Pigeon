@@ -128,60 +128,87 @@ logoutButton.addEventListener('click', () => {
 
 copyButton.addEventListener('click', () => {
     if (currentCode && !copyButton.disabled) {
-         console.log("Popup: Copy button clicked. Code:", currentCode); // SHOULD log in popup console
-         // Ask background script to copy
-        chrome.runtime.sendMessage({ action: 'copyCode', code: currentCode }, (response) => {
-            console.log("Popup: Received response from background for copyCode:", response); // SHOULD log in popup console after background replies
-            if (response && response.success) {
-                console.log("Popup: Code copy request successful (according to background). Updating UI."); // SHOULD log if background says success
-                 // Visual feedback logic...
-            } else {
-                 console.error('Popup: Failed to copy code via background script. Response:', response); // SHOULD log if background says failure or no response
-                 showError('Failed to copy code.');
-            }
-        });
-        // ... commented out direct copy code ...
+        console.log("Popup: Copy button clicked. Code:", currentCode);
+
+        // Instead of messaging background, do clipboard write here
+        navigator.clipboard.writeText(currentCode)
+            .then(() => {
+                console.log("Popup: Code copied successfully.");
+                // Optionally show success message
+            })
+            .catch(err => {
+                console.error('Popup: Clipboard write failed', err);
+                showError("Clipboard access failed. Please allow clipboard permission.");
+            });
     }
+});
+
+// Function to load and display code history
+async function loadCodeHistory() {
+    const { codeHistory } = await chrome.storage.local.get(['codeHistory']);
+    const historyList = document.getElementById('history-list');
+    historyList.innerHTML = ''; // Clear existing history
+
+    if (codeHistory && codeHistory.length > 0) {
+        codeHistory.forEach(codeData => {
+            const listItem = document.createElement('li');
+            const date = new Date(codeData.timestamp).toLocaleString();
+            listItem.textContent = `Code: ${codeData.code} (Found on: ${date})`;
+            historyList.appendChild(listItem);
+        });
+    } else {
+        historyList.innerHTML = '<li>No codes found in history.</li>';
+    }
+}
+
+// Clear history functionality
+document.getElementById('clear-history').addEventListener('click', async () => {
+    await chrome.storage.local.remove('codeHistory');
+    loadCodeHistory(); // Reload history after clearing
 });
 
 // --- Initial Status Check ---
 function checkStatus() {
-     console.log("Popup: Checking status...");
-     errorMessage.textContent = ''; // Clear messages on refresh
-     infoMessage.textContent = '';
+    console.log("Popup: Checking status...");
+    errorMessage.textContent = ''; // Clear messages on refresh
+    infoMessage.textContent = '';
 
-     // Tell background script the popup was opened to potentially clear the badge
-     chrome.runtime.sendMessage({ action: "clearBadge" });
+    // Tell background script the popup was opened to potentially clear the badge
+    chrome.runtime.sendMessage({ action: "clearBadge" });
 
-     // Get login status and latest code
-     chrome.runtime.sendMessage({ action: 'getStatus' }, (response) => {
+    // Get login status and latest code
+    chrome.runtime.sendMessage({ action: 'getStatus' }, (response) => {
         if (chrome.runtime.lastError) {
-             console.error("Popup Error: Cannot communicate with background script:", chrome.runtime.lastError.message);
-             showLoggedOutState("Error connecting to background service."); // Assume logged out
-             showError("Cannot connect. Try reloading the extension.");
-             return;
+            console.error("Popup Error: Cannot communicate with background script:", chrome.runtime.lastError.message);
+            showLoggedOutState("Error connecting to background service."); // Assume logged out
+            showError("Cannot connect. Try reloading the extension.");
+            return;
         }
 
         if (response) {
-             if (response.loggedIn) {
-                 console.log("Popup: User is logged in.");
-                 showLoggedInState(response.latestCodeData);
-             } else {
-                 console.log("Popup: User is logged out.");
-                 showLoggedOutState(); // Show default logged out message
-             }
-              if (response.error) {
-                  console.warn("Popup: Status response contained an error:", response.error);
-                  // Show a non-critical error if needed, but UI state should be set correctly
-                  // showError(`Status check issue: ${response.error}`);
-              }
+            if (response.loggedIn) {
+                console.log("Popup: User is logged in.");
+                showLoggedInState(response.latestCodeData);
+                loadCodeHistory(); // Load history when logged in
+            } else {
+                console.log("Popup: User is logged out.");
+                showLoggedOutState(); // Show default logged out message
+            }
+            if (response.error) {
+                console.warn("Popup: Status response contained an error:", response.error);
+            }
         } else {
-             console.error("Popup: No response received from getStatus message.");
-             showLoggedOutState("Failed to get status from background."); // Assume logged out
-             showError("No response from background. Try reloading.");
+            console.error("Popup: No response received from getStatus message.");
+            showLoggedOutState("Failed to get status from background."); // Assume logged out
+            showError("No response from background. Try reloading.");
         }
     });
 }
 
 // Check status when the popup is opened
 document.addEventListener('DOMContentLoaded', checkStatus);
+
+// Add this to your existing popup.js file
+document.getElementById('view-history').addEventListener('click', () => {
+    window.open(chrome.runtime.getURL('history.html'), '_blank');
+});

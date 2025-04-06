@@ -7,8 +7,10 @@
     "identity",
     "storage",
     "notifications",
-    "alarms"
+    "alarms",
+    "clipboardWrite"
   ],
+
   "host_permissions": [
     "https://www.googleapis.com/"
   ],
@@ -28,5 +30,11 @@
     "16": "images/logo16.png",
     "48": "images/logo48.png",
     "128": "images/logo128.png"
-  }
+  },
+  "web_accessible_resources": [
+    {
+      "resources": ["history.html"],
+      "matches": ["<all_urls>"]
+    }
+  ]
 }
