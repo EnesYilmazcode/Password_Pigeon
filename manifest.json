@@ -1,0 +1,32 @@
+{
+  "manifest_version": 3,
+  "name": "Password Pigeon",
+  "version": "0.1.0",
+  "description": "Automatically detects 2FA codes from Gmail and displays them.",
+  "permissions": [
+    "identity",
+    "storage",
+    "notifications",
+    "alarms"
+  ],
+  "host_permissions": [
+    "https://www.googleapis.com/"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "images/logo16.png",
+      "48": "images/logo48.png",
+      "128": "images/logo128.png"
+    },
+    "default_title": "Password Pigeon"
+  },
+  "icons": {
+    "16": "images/logo16.png",
+    "48": "images/logo48.png",
+    "128": "images/logo128.png"
+  }
+}
