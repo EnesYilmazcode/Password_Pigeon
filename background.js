@@ -36,13 +36,12 @@ async function ensureAuthToken() {
   }
 
   try {
-    const token = await launchOAuthFlow(false); // Try silent login first
+    const token = await launchOAuthFlow(false); // Try silent login
     authToken = token;
     await chrome.storage.local.set({ authToken: token, authTimestamp: Date.now() });
     return token;
-  } catch (silentErr) {
-    console.warn("Silent login failed, trying interactive login...");
-    const token = await launchOAuthFlow(true); // Fallback to interactive login
+  } catch {
+    const token = await launchOAuthFlow(true); // Fallback to interactive
     authToken = token;
     await chrome.storage.local.set({ authToken: token, authTimestamp: Date.now() });
     return token;
@@ -61,9 +60,6 @@ async function launchOAuthFlow(interactive = true) {
 
     chrome.identity.launchWebAuthFlow({ url: authUrl, interactive }, async function (redirectedTo) {
       if (chrome.runtime.lastError || !redirectedTo) {
-        if (chrome.runtime.lastError?.message === "The user did not approve access.") {
-          return reject(new Error("Sign-in canceled by user."));
-        }
         return reject(chrome.runtime.lastError || new Error('Auth failed or was cancelled'));
       }
 
@@ -101,8 +97,6 @@ async function fetchWithAuth(url, token = authToken) {
   });
 
   if (res.status === 401) {
-    console.warn("Authorization failed (401). Trying silent re-auth...");
-
     try {
       const refreshedToken = await launchOAuthFlow(false);
       if (refreshedToken) {
@@ -110,10 +104,7 @@ async function fetchWithAuth(url, token = authToken) {
         await chrome.storage.local.set({ authToken: refreshedToken, authTimestamp: Date.now() });
         return await fetchWithAuth(url, refreshedToken);
       }
-    } catch (e) {
-      console.warn("Silent re-auth failed:", e.message);
-    }
-
+    } catch {}
     await removeToken();
     throw new Error("Unauthorized");
   }
@@ -162,14 +153,10 @@ async function checkForCode() {
 
     if (newestCode) {
       const stored = await chrome.storage.local.get(['latestCode', 'lastNotifiedCode']);
-      const lastSaved = stored.latestCode || {};
       const lastNotified = stored.lastNotifiedCode || {};
 
-      // Check if the newest code is different from the last notified code
       if (!lastNotified.code || lastNotified.code !== newestCode) {
         await chrome.storage.local.set({ latestCode: { code: newestCode, timestamp: newestTimestamp } });
-
-        // Update the last notified code
         await chrome.storage.local.set({ lastNotifiedCode: { code: newestCode, timestamp: Date.now() } });
 
         updateIcon(true);
@@ -188,18 +175,14 @@ async function checkForCode() {
             priority: 2
           });
         }
-      } else {
-        console.log("No new code detected, notification not sent.");
       }
     }
-
   } catch (err) {
     console.error("Code check failed:", err.message);
   }
 
   isChecking = false;
 }
-
 
 // --- Alarm ---
 chrome.runtime.onInstalled.addListener(() => {
@@ -230,9 +213,16 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   }
 
   if (request.action === "getStatus") {
-    chrome.storage.local.get('latestCode', data => {
+    chrome.storage.local.get(['authToken', 'authTimestamp', 'latestCode'], async (data) => {
+      const now = Date.now();
+      const tokenValid = data.authToken && data.authTimestamp && (now - data.authTimestamp < 55 * 60 * 1000);
+
+      if (tokenValid) {
+        authToken = data.authToken;
+      }
+
       sendResponse({
-        loggedIn: !!authToken,
+        loggedIn: tokenValid,
         latestCodeData: data.latestCode || null
       });
     });
@@ -244,19 +234,15 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     sendResponse({ success: true });
     return true;
   }
-  
 
   if (request.action === "copyCode") {
     if (request.code) {
-        navigator.clipboard.writeText(request.code)
-            .then(() => sendResponse({ success: true }))
-            .catch(err => {
-                console.error("Failed to copy code:", err);
-                sendResponse({ success: false, error: "Clipboard write failed." });
-            });
+      navigator.clipboard.writeText(request.code)
+        .then(() => sendResponse({ success: true }))
+        .catch(() => sendResponse({ success: false, error: "Clipboard write failed." }));
     } else {
-        sendResponse({ success: false, error: "No code provided." });
+      sendResponse({ success: false, error: "No code provided." });
     }
-    return true; // Keep the message channel open for the async response
+    return true;
   }
 });

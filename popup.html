@@ -13,7 +13,11 @@
         <h1>Password Pigeon</h1>
       </div>
       <button id="logout-button" class="icon-button" title="Sign Out" style="display: none;">
-        ⎋
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+          <polyline points="16 17 21 12 16 7"></polyline>
+          <line x1="21" y1="12" x2="9" y2="12"></line>
+        </svg>
       </button>
     </div>
 
@@ -24,26 +28,18 @@
 
     <div id="code-section" style="display: none;">
       <h2>Latest Code</h2>
-      <div class="code-box">
-        <span id="code-text">No code found yet.</span>
-        <button id="copy-button" class="copy-button" title="Copy Code" disabled>
-          📋
-        </button>
+      <div class="code-container">
+        <div class="code-box" id="copyable-code-container">
+          <span id="code-text">No code found yet.</span>
+          <div class="tooltip">Click to copy</div>
+        </div>
+        <div class="copy-indicator">Copied!</div>
+        <p id="code-timestamp" class="timestamp"></p>
       </div>
-      <p id="code-timestamp" class="timestamp"></p>
     </div>
 
     <p id="error-message" class="error"></p>
     <p id="info-message" class="info"></p>
-
-    <div id="history-container">
-      <h2>Code History</h2>
-      <ul id="history-list"></ul>
-      <div class="history-controls">
-        <button id="clear-history" class="button">Clear</button>
-        <button id="view-history" class="button">View All</button>
-      </div>
-    </div>
   </div>
 
   <script src="popup.js"></script>
