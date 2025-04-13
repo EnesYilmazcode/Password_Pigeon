@@ -33,7 +33,7 @@
   },
   "web_accessible_resources": [
     {
-      "resources": ["history.html"],
+      "resources": ["known_senders.json", "patterns.json"],
       "matches": ["<all_urls>"]
     }
   ]
