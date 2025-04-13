@@ -1,4 +1,5 @@
 // --- Constants ---
+// These constants define URLs, intervals, regex patterns, and common subjects/senders for email filtering.
 const GMAIL_API_URL = 'https://www.googleapis.com/gmail/v1/users/me/messages';
 const POLLING_INTERVAL_MINUTES = 1;
 const ALARM_NAME = 'gmailCheckAlarm';
@@ -12,6 +13,7 @@ const SCOPES = 'https://www.googleapis.com/auth/gmail.readonly';
 let authToken = null;
 let isChecking = false;
 
+// Icons for the extension's action button, indicating active or inactive states.
 const ICONS = {
   inactive: {
     "16": "images/logo16.png",
@@ -26,28 +28,42 @@ const ICONS = {
 };
 
 // --- Token Management ---
+
+/**
+ * Ensures that a valid authentication token is available.
+ * If the token is expired or not present, it attempts to obtain a new one.
+ * @returns {Promise<string>} The authentication token.
+ */
 async function ensureAuthToken() {
   const { authToken: storedToken, authTimestamp } = await chrome.storage.local.get(['authToken', 'authTimestamp']);
   const now = Date.now();
 
+  // Check if the stored token is still valid (less than 55 minutes old)
   if (storedToken && authTimestamp && (now - authTimestamp < 55 * 60 * 1000)) {
     authToken = storedToken;
     return storedToken;
   }
 
   try {
-    const token = await launchOAuthFlow(false); // Try silent login
+    // Try to get a new token silently
+    const token = await launchOAuthFlow(false);
     authToken = token;
     await chrome.storage.local.set({ authToken: token, authTimestamp: Date.now() });
     return token;
   } catch {
-    const token = await launchOAuthFlow(true); // Fallback to interactive
+    // If silent login fails, prompt the user to log in interactively
+    const token = await launchOAuthFlow(true);
     authToken = token;
     await chrome.storage.local.set({ authToken: token, authTimestamp: Date.now() });
     return token;
   }
 }
 
+/**
+ * Launches the OAuth flow to obtain an authentication token.
+ * @param {boolean} interactive - Whether to prompt the user for login (true) or try silently (false).
+ * @returns {Promise<string>} The authentication token.
+ */
 async function launchOAuthFlow(interactive = true) {
   return new Promise((resolve, reject) => {
     const redirectUri = chrome.identity.getRedirectURL();
@@ -82,6 +98,9 @@ async function launchOAuthFlow(interactive = true) {
   });
 }
 
+/**
+ * Removes the stored authentication token and updates the icon to inactive.
+ */
 async function removeToken() {
   authToken = null;
   await chrome.storage.local.remove(['authToken', 'authTimestamp']);
@@ -89,6 +108,14 @@ async function removeToken() {
 }
 
 // --- Gmail Fetching ---
+
+/**
+ * Fetches data from a given URL using the provided authentication token.
+ * If the token is unauthorized, it attempts to refresh it.
+ * @param {string} url - The URL to fetch data from.
+ * @param {string} [token=authToken] - The authentication token to use.
+ * @returns {Promise<Response>} The fetch response.
+ */
 async function fetchWithAuth(url, token = authToken) {
   const res = await fetch(url, {
     headers: {
@@ -98,6 +125,7 @@ async function fetchWithAuth(url, token = authToken) {
 
   if (res.status === 401) {
     try {
+      // Try to refresh the token silently
       const refreshedToken = await launchOAuthFlow(false);
       if (refreshedToken) {
         authToken = refreshedToken;
@@ -112,11 +140,20 @@ async function fetchWithAuth(url, token = authToken) {
   return res;
 }
 
+/**
+ * Updates the extension's icon to indicate active or inactive status.
+ * @param {boolean} [active=true] - Whether the icon should be active (true) or inactive (false).
+ */
 function updateIcon(active = true) {
   chrome.action.setIcon({ path: active ? ICONS.active : ICONS.inactive });
 }
 
 // --- Gmail Monitor ---
+
+/**
+ * Checks the user's Gmail for new security codes.
+ * If a new code is found, it updates the storage and notifies the user.
+ */
 async function checkForCode() {
   if (isChecking) return;
   isChecking = true;
@@ -185,11 +222,20 @@ async function checkForCode() {
 }
 
 // --- Alarm ---
+
+/**
+ * Sets up an alarm to periodically check for new Gmail messages.
+ * This function is called when the extension is installed.
+ */
 chrome.runtime.onInstalled.addListener(() => {
   chrome.alarms.create(ALARM_NAME, { periodInMinutes: POLLING_INTERVAL_MINUTES });
   console.log("Password Pigeon installed. Alarm set.");
 });
 
+/**
+ * Listens for the alarm event and triggers the code check.
+ * @param {Alarm} alarm - The alarm object.
+ */
 chrome.alarms.onAlarm.addListener((alarm) => {
   if (alarm.name === ALARM_NAME) {
     checkForCode();
@@ -197,19 +243,26 @@ chrome.alarms.onAlarm.addListener((alarm) => {
 });
 
 // --- Messaging ---
+
+/**
+ * Listens for messages from other parts of the extension and handles actions like login, logout, and status checks.
+ * @param {Object} request - The message request object.
+ * @param {Object} sender - The sender of the message.
+ * @param {Function} sendResponse - The function to call with the response.
+ */
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.action === "login") {
     ensureAuthToken()
       .then(token => sendResponse({ success: true, token }))
       .catch(error => sendResponse({ success: false, error: error.message }));
-    return true;
+    return true; // Keep the message channel open for async response
   }
 
   if (request.action === "logout") {
     removeToken()
       .then(() => sendResponse({ success: true }))
       .catch(err => sendResponse({ success: false, error: err.message }));
-    return true;
+    return true; // Keep the message channel open for async response
   }
 
   if (request.action === "getStatus") {
@@ -226,13 +279,13 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         latestCodeData: data.latestCode || null
       });
     });
-    return true;
+    return true; // Keep the message channel open for async response
   }
 
   if (request.action === "clearBadge") {
     chrome.action.setBadgeText({ text: "" });
     sendResponse({ success: true });
-    return true;
+    return true; // Keep the message channel open for async response
   }
 
   if (request.action === "copyCode") {
@@ -243,6 +296,6 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     } else {
       sendResponse({ success: false, error: "No code provided." });
     }
-    return true;
+    return true; // Keep the message channel open for async response
   }
 });

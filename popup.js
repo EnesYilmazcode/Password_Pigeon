@@ -1,3 +1,4 @@
+// Get references to HTML elements
 const loginButton = document.getElementById('login-button');
 const logoutButton = document.getElementById('logout-button');
 const authStatus = document.getElementById('auth-status');
@@ -12,6 +13,10 @@ const copyIndicator = document.querySelector('.copy-indicator');
 
 let currentCode = null;
 
+/**
+ * Updates the UI to show the logged-out state.
+ * @param {string} [message='Please sign in to fetch codes.'] - The message to display when logged out.
+ */
 function showLoggedOutState(message = 'Please sign in to fetch codes.') {
   authStatus.textContent = message;
   loginButton.style.display = 'block';
@@ -19,10 +24,16 @@ function showLoggedOutState(message = 'Please sign in to fetch codes.') {
   codeSection.style.display = 'none';
   errorMessage.textContent = '';
   infoMessage.textContent = '';
-  logo.src = "images/logo48.png";
+  logo.src = "images/logo48.png"; // Set the logo to the default image
   document.body.classList.remove('logged-in');
 }
 
+/**
+ * Updates the UI to show the logged-in state and displays the latest code if available.
+ * @param {Object} codeData - The data containing the latest code and its timestamp.
+ * @param {string} codeData.code - The latest security code.
+ * @param {number} codeData.timestamp - The timestamp when the code was found.
+ */
 function showLoggedInState(codeData) {
   authStatus.textContent = 'Monitoring Gmail for codes...';
   loginButton.style.display = 'none';
@@ -30,7 +41,7 @@ function showLoggedInState(codeData) {
   codeSection.style.display = 'block';
   errorMessage.textContent = '';
   infoMessage.textContent = '';
-  logo.src = "images/logo48_active.png";
+  logo.src = "images/logo48_active.png"; // Set the logo to the active image
   document.body.classList.add('logged-in');
 
   if (codeData && codeData.code) {
@@ -50,16 +61,27 @@ function showLoggedInState(codeData) {
   }
 }
 
+/**
+ * Displays an error message in the UI.
+ * @param {string} message - The error message to display.
+ */
 function showError(message) {
   errorMessage.textContent = `Error: ${message}`;
   infoMessage.textContent = '';
 }
 
+/**
+ * Displays an informational message in the UI.
+ * @param {string} message - The informational message to display.
+ */
 function showInfo(message) {
   infoMessage.textContent = message;
   errorMessage.textContent = '';
 }
 
+/**
+ * Copies the current code to the clipboard and shows a visual indicator.
+ */
 function copyCodeToClipboard() {
   if (currentCode) {
     navigator.clipboard.writeText(currentCode)
@@ -76,6 +98,7 @@ function copyCodeToClipboard() {
   }
 }
 
+// Event listener for the login button
 loginButton.addEventListener('click', () => {
   showInfo("Attempting sign in...");
   loginButton.disabled = true;
@@ -94,6 +117,7 @@ loginButton.addEventListener('click', () => {
   });
 });
 
+// Event listener for the logout button
 logoutButton.addEventListener('click', () => {
   showInfo("Signing out...");
   logoutButton.disabled = true;
@@ -105,13 +129,16 @@ logoutButton.addEventListener('click', () => {
   });
 });
 
-// Add event listener for clickable code container
+// Event listener for the code container to copy the code
 copyableCodeContainer.addEventListener('click', () => {
   if (currentCode) {
     copyCodeToClipboard();
   }
 });
 
+/**
+ * Checks the current authentication status and updates the UI accordingly.
+ */
 function checkStatus() {
   errorMessage.textContent = '';
   infoMessage.textContent = '';
@@ -132,4 +159,5 @@ function checkStatus() {
   });
 }
 
+// Check the status when the popup is opened
 document.addEventListener('DOMContentLoaded', checkStatus);
