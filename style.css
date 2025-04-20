@@ -1,15 +1,40 @@
 :root {
-  --primary-color: #007aff;
-  --primary-hover: #005ecb;
+  --primary-color: #4f7df9;
+  --primary-hover: #3e65d2;
   --background: #ffffff;
-  --card-bg: #f4f6fb;
+  --card-bg: #f5f7fb;
   --text-primary: #2c3e50;
   --text-secondary: #6B7280;
   --success: #10B981;
   --error: #dc3545;
-  --border-radius: 8px;
-  --box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+  --border-radius: 12px;
+  --box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
   --transition: all 0.2s ease;
+
+  /* Light theme default variables */
+  --bg-color: #ffffff;
+  --card-background: #f5f7fb;
+  --text-color: #2c3e50;
+  --text-light: #6B7280;
+  --border-color: #eaeaea;
+  --status-inactive: #bbbbbb;
+  --status-active: #10B981;
+  --settings-panel-bg: #ffffff;
+  --settings-item-hover-bg: #f0f0f0;
+}
+
+[data-theme="dark"] {
+  --primary-color: #5e8bff;
+  --primary-hover: #4972e6;
+  --bg-color: #1a1a1a;
+  --card-background: #2a2a2a;
+  --text-color: #f0f0f0;
+  --text-light: #b0b0b0;
+  --border-color: #3a3a3a;
+  --status-inactive: #555555;
+  --status-active: #10B981;
+  --settings-panel-bg: #2e2e2e;
+  --settings-item-hover-bg: #3a3a3a;
 }
 
 * {
@@ -20,28 +45,41 @@
 }
 
 body {
-  width: 360px;
-  background-color: var(--background);
-  color: var(--text-primary);
+  width: 340px; /* Keep width consistent */
+  background-color: var(--bg-color);
+  color: var(--text-color);
   padding: 0;
   font-size: 14px;
+  transition: var(--transition);
 }
 
 .container {
-  padding: 16px;
+  padding: 20px;
   box-sizing: border-box;
-  border-radius: 10px;
-  background-color: #fdfdfd;
+  border-radius: var(--border-radius);
+  background-color: var(--bg-color);
   box-shadow: var(--box-shadow);
+  transition: var(--transition);
+  width: 100%; /* Ensure container takes full body width */
 }
 
+/* --- Header Modifications --- */
 .header {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  margin-bottom: 16px;
-  padding-bottom: 12px;
-  border-bottom: 1px solid #eaeaea;
+  justify-content: space-between; /* Space between content and settings */
+  margin-bottom: 20px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--border-color);
+  transition: var(--transition);
+  position: relative; /* Needed for settings panel positioning */
+}
+
+.header-content {
+  display: flex;
+  justify-content: center; /* Center the logo/title area */
+  flex-grow: 1; /* Allow it to take available space */
+  /* Remove margin-right if settings icon is absolutely positioned */
 }
 
 .logo-title {
@@ -50,113 +88,248 @@ body {
   gap: 12px;
 }
 
-#logo {
-  width: 28px;
-  height: 28px;
-  object-fit: contain;
+.settings-area {
+  position: relative; /* Context for the panel */
+}
+/* --- End Header Modifications --- */
+
+.status-indicator {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background-color: var(--status-inactive);
+  position: relative;
+  flex-shrink: 0; /* Prevent shrinking */
+}
+
+.status-indicator.active {
+  background-color: var(--status-active);
+}
+
+.pulse-ring {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background-color: var(--status-active);
+  opacity: 0;
+  animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+  0% { transform: translate(-50%, -50%) scale(1); opacity: 0.8; }
+  70% { transform: translate(-50%, -50%) scale(1.5); opacity: 0; }
+  100% { transform: translate(-50%, -50%) scale(1); opacity: 0; }
+}
+
+.radar {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  overflow: hidden;
+}
+
+.radar-sweep {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  clip-path: polygon(50% 50%, 100% 0, 100% 100%);
+  background-color: rgba(16, 185, 129, 0.7);
+  transform-origin: center;
+  animation: sweep 2s infinite linear;
+}
+
+@keyframes sweep {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
 }
 
 h1 {
   font-size: 18px;
   font-weight: 600;
   margin: 0;
+  color: var(--text-color);
+  transition: var(--transition);
+  white-space: nowrap; /* Prevent wrapping */
 }
 
 h2 {
-  font-size: 15px;
+  font-size: 16px;
   font-weight: 500;
-  margin-bottom: 10px;
-  color: var(--text-secondary);
+  margin-bottom: 12px;
+  color: var(--text-light);
+  text-align: center;
+  transition: var(--transition);
 }
 
 #auth-section {
-  margin-bottom: 16px;
+  margin-bottom: 18px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
 }
 
 #auth-status {
-  margin-bottom: 12px;
+  margin-bottom: 14px;
   font-size: 14px;
-  color: var(--text-secondary);
+  color: var(--text-light);
+  text-align: center;
+  transition: var(--transition);
+}
+
+.button-wrapper {
+  display: flex;
+  justify-content: center;
+  width: 100%;
 }
 
 .button {
   background: linear-gradient(90deg, var(--primary-color), var(--primary-hover));
   color: white;
   border: none;
-  padding: 10px 16px;
+  padding: 10px 24px;
   border-radius: var(--border-radius);
   font-weight: 600;
   cursor: pointer;
   transition: var(--transition);
   font-size: 14px;
-  box-shadow: 0 2px 4px rgba(0, 122, 255, 0.2);
+  box-shadow: 0 4px 8px rgba(79, 125, 249, 0.2);
 }
 
 .button:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 4px 8px rgba(0, 122, 255, 0.3);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 12px rgba(79, 125, 249, 0.3);
 }
 
-.button:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-  transform: none;
-}
+.button:active { transform: translateY(0); }
+.button:disabled { opacity: 0.6; cursor: not-allowed; transform: none; }
 
-.full-width {
-  width: 100%;
-}
-
+/* --- Icon Button (Gear) Styling --- */
 .icon-button {
   background: transparent;
   border: none;
-  color: var(--text-secondary);
+  color: var(--text-light);
   cursor: pointer;
-  padding: 6px;
-  border-radius: 6px;
+  padding: 8px; /* Keep padding consistent */
+  border-radius: 50%; /* Make it circular */
   transition: var(--transition);
   display: flex;
   align-items: center;
   justify-content: center;
+  width: 36px; /* Fixed size */
+  height: 36px; /* Fixed size */
 }
 
 .icon-button:hover {
-  background-color: rgba(0, 0, 0, 0.05);
-  color: var(--error);
+  background-color: var(--settings-item-hover-bg);
+  color: var(--primary-color);
+}
+
+/* --- Settings Panel Styling --- */
+.settings-panel {
+  display: none; /* Hidden by default */
+  position: absolute;
+  top: 100%; /* Position below the gear icon */
+  right: 0;
+  background-color: var(--settings-panel-bg);
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  border: 1px solid var(--border-color);
+  z-index: 10;
+  min-width: 160px; /* Minimum width */
+  padding: 8px 0; /* Vertical padding */
+  transition: opacity 0.2s ease, transform 0.2s ease;
+  opacity: 0;
+  transform: translateY(-10px);
+  pointer-events: none; /* Prevent interaction when hidden */
+}
+
+.settings-panel.show {
+  display: block; /* Show when active */
+  opacity: 1;
+  transform: translateY(0);
+  pointer-events: auto; /* Allow interaction when shown */
+}
+
+.settings-item {
+  display: flex;
+  align-items: center;
+  gap: 10px; /* Space between icon and text */
+  background: none;
+  border: none;
+  color: var(--text-color);
+  cursor: pointer;
+  padding: 10px 16px; /* Padding */
+  text-align: left;
+  width: 100%;
+  font-size: 14px;
+  transition: background-color 0.2s ease;
+}
+
+.settings-item svg {
+  flex-shrink: 0; /* Prevent icon shrinking */
+  color: var(--text-light); /* Icon color */
+}
+
+.settings-item:hover {
+  background-color: var(--settings-item-hover-bg);
+}
+
+.settings-item:hover svg {
+  color: var(--primary-color); /* Icon color on hover */
+}
+
+/* --- Code Section Styling --- */
+.code-section {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
 }
 
 .code-container {
   margin-top: 12px;
   position: relative;
+  width: 100%;
 }
 
 .code-box {
-  background-color: var(--card-bg);
+  background-color: var(--card-background);
   border-radius: var(--border-radius);
-  padding: 14px;
+  padding: 20px;
   position: relative;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
   cursor: pointer;
   transition: var(--transition);
   overflow: hidden;
-  border: 1px solid #d9dfe8;
+  border: 1px solid var(--border-color);
   display: flex;
-  justify-content: space-between;
+  justify-content: center;
   align-items: center;
+  min-height: 70px; /* Use min-height */
 }
 
 .code-box:hover {
-  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 5px 10px rgba(0, 0, 0, 0.15);
   border-color: var(--primary-color);
 }
 
 #code-text {
   font-family: 'Courier New', monospace;
-  font-size: 20px;
+  font-size: 28px;
   font-weight: bold;
-  color: #1e2a38;
+  color: var(--text-color);
   word-break: break-all;
-  flex-grow: 1;
+  text-align: center;
+  transition: var(--transition);
 }
 
 .copy-indicator {
@@ -165,8 +338,8 @@ h2 {
   right: 8px;
   background-color: var(--success);
   color: white;
-  padding: 4px 8px;
-  border-radius: 4px;
+  padding: 4px 10px;
+  border-radius: 6px;
   font-size: 12px;
   font-weight: 500;
   opacity: 0;
@@ -175,16 +348,15 @@ h2 {
   pointer-events: none;
 }
 
-.show-copy-indicator {
-  opacity: 1;
-  transform: translateY(0);
-}
+.show-copy-indicator { opacity: 1; transform: translateY(0); }
 
 .timestamp {
   font-size: 12px;
-  color: var(--text-secondary);
-  margin-top: 8px;
+  color: var(--text-light);
+  margin-top: 10px;
   text-align: right;
+  transition: var(--transition);
+  width: 100%;
 }
 
 .error {
@@ -192,6 +364,7 @@ h2 {
   font-size: 13px;
   margin-top: 16px;
   font-weight: 500;
+  text-align: center;
 }
 
 .info {
@@ -199,24 +372,37 @@ h2 {
   font-size: 13px;
   margin-top: 16px;
   font-weight: 500;
+  text-align: center;
 }
 
 .tooltip {
   position: absolute;
-  top: -30px;
+  bottom: 100%; /* Position above the element */
   left: 50%;
-  transform: translateX(-50%);
+  transform: translateX(-50%) translateY(-5px); /* Center and add slight gap */
   background-color: rgba(0, 0, 0, 0.8);
   color: white;
-  padding: 4px 8px;
-  border-radius: 4px;
+  padding: 4px 10px;
+  border-radius: 6px;
   font-size: 12px;
   opacity: 0;
   transition: opacity 0.2s;
   pointer-events: none;
   white-space: nowrap;
+  z-index: 5; /* Ensure it's above the code box */
 }
 
-.code-box:hover .tooltip {
-  opacity: 1;
+.code-box:hover .tooltip { opacity: 1; }
+
+.pulse-animation { animation: pulse-effect 2s infinite; }
+
+
+/* Ensure body/html have height if needed for absolute positioning relative to viewport */
+html, body {
+  height: auto; /* Or 100% if container needs full height */
+}
+
+/* Add a click outside listener helper class */
+.settings-panel-visible {
+  /* Used by JS to detect clicks outside */
 }

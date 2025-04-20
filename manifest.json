@@ -8,11 +8,13 @@
     "storage",
     "notifications",
     "alarms",
-    "clipboardWrite"
+    "clipboardWrite",
+    "scripting",
+    "tabs"
   ],
-
   "host_permissions": [
-    "https://www.googleapis.com/"
+    "https://www.googleapis.com/",
+    "<all_urls>"
   ],
   "background": {
     "service_worker": "background.js"
