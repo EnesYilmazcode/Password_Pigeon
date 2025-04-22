@@ -406,3 +406,8 @@ html, body {
 .settings-panel-visible {
   /* Used by JS to detect clicks outside */
 }
+
+.copy-indicator.visible {
+  opacity: 1;
+  transform: translateY(0);
+}

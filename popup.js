@@ -1,3 +1,5 @@
+// --- START OF FILE popup.js ---
+
 // Get references to HTML elements
 const loginButton = document.getElementById('login-button');
 const authStatus = document.getElementById('auth-status');
@@ -20,27 +22,40 @@ const themeToggleButton = document.getElementById('theme-toggle-button');
 const logoutButton = document.getElementById('logout-button'); // Moved reference
 
 let currentCode = null;
-let currentTheme = localStorage.getItem('theme') || 'light';
 
-// Function to update theme button icon/text based on current theme
+// --- Theme Setup Based on System ---
+let storedTheme = localStorage.getItem('theme');
+let systemPrefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+let currentTheme = storedTheme || (systemPrefersDark ? 'dark' : 'light');
+
+// Apply theme
+document.documentElement.setAttribute('data-theme', currentTheme);
+
+/**
+ * Toggles between light and dark mode.
+ */
+function toggleTheme() {
+  currentTheme = currentTheme === 'light' ? 'dark' : 'light';
+  document.documentElement.setAttribute('data-theme', currentTheme);
+  localStorage.setItem('theme', currentTheme);
+  updateThemeButton(); // Update button state after toggle
+}
+
+// Function to update the theme button icon/text based on current theme
 function updateThemeButton() {
-  if (currentTheme === 'dark') {
-    // Example: Update SVG or text if needed
-    // themeToggleButton.querySelector('svg')... // Modify SVG attributes or replace innerHTML
-    // For simplicity, we just ensure the main attribute is set
-    document.documentElement.setAttribute('data-theme', 'dark');
-  } else {
-    document.documentElement.setAttribute('data-theme', 'light');
-  }
+  // Example: Change icon based on theme (add your SVGs or logic here)
+  // const icon = themeToggleButton.querySelector('svg path'); // Example selector
+  // if (icon) {
+  //   if (currentTheme === 'dark') {
+  //     icon.setAttribute('d', 'M8 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM8 0a.5.5 0 0 1 .5.5v2a.5.5 0 0 1-1 0v-2A.5.5 0 0 1 8 0zm0 13a.5.5 0 0 1 .5.5v2a.5.5 0 0 1-1 0v-2A.5.5 0 0 1 8 13zm8-5a.5.5 0 0 1-.5.5h-2a.5.5 0 0 1 0-1h2a.5.5 0 0 1 .5.5zM3 8a.5.5 0 0 1-.5.5h-2a.5.5 0 0 1 0-1h2A.5.5 0 0 1 3 8zm10.657-5.657a.5.5 0 0 1 0 .707l-1.414 1.415a.5.5 0 1 1-.707-.708l1.414-1.414a.5.5 0 0 1 .707 0zm-9.193 9.193a.5.5 0 0 1 0 .707L3.05 13.657a.5.5 0 0 1-.707-.707l1.414-1.414a.5.5 0 0 1 .707 0zm9.193 0a.5.5 0 0 1-.707.707l-1.414-1.414a.5.5 0 0 1 .707-.707l1.414 1.414a.5.5 0 0 1 0 .707zm-9.193-9.193a.5.5 0 0 1-.707.707L1.634 3.05a.5.5 0 1 1 .707-.707l1.414 1.414a.5.5 0 0 1 0 .707z'); // Sun icon
+  //   } else {
+  //     icon.setAttribute('d', 'M6 .278a.768.768 0 0 1 .08.858 7.208 7.208 0 0 0-.878 3.46c0 4.021 3.278 7.277 7.318 7.277.527 0 1.04-.055 1.533-.16a.787.787 0 0 1 .81.316.733.733 0 0 1-.031.893A8.349 8.349 0 0 1 8.344 16C3.734 16 0 12.286 0 7.71 0 4.266 2.114 1.312 5.124.06A.752.752 0 0 1 6 .278zM4.858 1.311A7.269 7.269 0 0 0 1.025 7.71c0 4.021 3.278 7.277 7.318 7.277a7.316 7.316 0 0 0 5.205-2.162c-.337.042-.68.063-1.029.063-4.61 0-8.343-3.714-8.343-8.29 0-1.167.242-2.278.681-3.286z'); // Moon icon
+  //   }
+  // }
 }
 
 // Initialize theme and button
-if (currentTheme === 'dark') {
-  document.documentElement.setAttribute('data-theme', 'dark');
-} else {
-  document.documentElement.setAttribute('data-theme', 'light');
-}
-// updateThemeButton(); // Call if you want to update the icon inside the button initially
+updateThemeButton(); // Call to update the button icon/text if needed
 
 /**
  * Updates the UI to show the logged-out state.
@@ -117,35 +132,35 @@ function showInfo(message) {
 }
 
 /**
- * Copies the current code to the clipboard.
+ * Copies the current code to the clipboard using the popup's context.
  */
-function copyCodeToClipboard() {
+async function copyCodeToClipboard() {
   if (currentCode) {
-    navigator.clipboard.writeText(currentCode)
-      .then(() => {
-        copyIndicator.classList.add('show-copy-indicator');
-        setTimeout(() => {
-          copyIndicator.classList.remove('show-copy-indicator');
-        }, 2000);
-      })
-      .catch(err => showError("Clipboard access failed."));
+    try {
+      await navigator.clipboard.writeText(currentCode);
+      // Show visual feedback in popup
+      copyIndicator.classList.add('show-copy-indicator');
+      setTimeout(() => {
+        copyIndicator.classList.remove('show-copy-indicator');
+      }, 1500);
+      showInfo("Code copied to clipboard!"); // Optional feedback
+      console.log("Code copied successfully from popup:", currentCode);
+    } catch (err) {
+      console.error("Popup copy failed:", err);
+      showError("Could not copy code. Permissions issue?");
+      // Fallback attempt (optional, less reliable for popups):
+      // try {
+      //   const success = document.execCommand('copy'); // Legacy fallback
+      //   if (success) {
+      //      // Show feedback
+      //   } else {
+      //      showError("Copy failed.");
+      //   }
+      // } catch (execErr) {
+      //   showError("Copy failed.");
+      // }
+    }
   }
-}
-
-/**
- * Toggles between light and dark mode.
- */
-function toggleTheme() {
-  if (currentTheme === 'light') {
-    document.documentElement.setAttribute('data-theme', 'dark');
-    localStorage.setItem('theme', 'dark');
-    currentTheme = 'dark';
-  } else {
-    document.documentElement.setAttribute('data-theme', 'light');
-    localStorage.setItem('theme', 'light');
-    currentTheme = 'light';
-  }
-  // updateThemeButton(); // Update button visual if needed
 }
 
 /**
@@ -161,15 +176,14 @@ function toggleSettingsPanel() {
  * Closes the settings panel if a click occurs outside of it.
  */
 function handleClickOutside(event) {
-    // Check if the panel is visible and the click was outside the panel and the toggle button
-    if (settingsPanel.classList.contains('show') &&
-        !settingsPanel.contains(event.target) &&
-        !settingsButton.contains(event.target)) {
-        settingsPanel.classList.remove('show');
-        document.body.classList.remove('settings-panel-visible');
-    }
+  // Check if the panel is visible and the click was outside the panel and the toggle button
+  if (settingsPanel.classList.contains('show') &&
+      !settingsPanel.contains(event.target) &&
+      !settingsButton.contains(event.target)) {
+    settingsPanel.classList.remove('show');
+    document.body.classList.remove('settings-panel-visible');
+  }
 }
-
 
 // --- Event Listeners ---
 
@@ -209,36 +223,31 @@ logoutButton.addEventListener('click', () => {
 // Copy Code Container
 copyableCodeContainer.addEventListener('click', () => {
   if (currentCode) {
-    copyCodeToClipboard();
+    copyCodeToClipboard(); // Call the updated function
   }
 });
 
 // Theme Toggle Button (inside panel)
 themeToggleButton.addEventListener('click', () => {
-    toggleTheme();
-    // Optionally close panel after selection
-    // settingsPanel.classList.remove('show');
-    // document.body.classList.remove('settings-panel-visible');
+  toggleTheme();
 });
 
 // Settings Gear Icon Button
 settingsButton.addEventListener('click', (event) => {
-    event.stopPropagation(); // Prevent click from immediately triggering the 'click outside' listener
-    toggleSettingsPanel();
+  event.stopPropagation(); // Prevent click from immediately triggering the 'click outside' listener
+  toggleSettingsPanel();
 });
 
 // About Button (inside panel) - Add functionality later if needed
 aboutButton.addEventListener('click', () => {
-    // Placeholder for About action (e.g., open a new tab or show info)
-    console.log("About button clicked");
-    alert("Password Pigeon v0.1.0\nCreated to fetch 2FA codes."); // Simple alert for now
-    settingsPanel.classList.remove('show'); // Close panel
-    document.body.classList.remove('settings-panel-visible');
+  console.log("About button clicked");
+  alert("Password Pigeon v0.1.0\nCreated to fetch 2FA codes."); // Simple alert for now
+  settingsPanel.classList.remove('show'); // Close panel
+  document.body.classList.remove('settings-panel-visible');
 });
 
 // Listener for clicks outside the settings panel
 document.addEventListener('click', handleClickOutside);
-
 
 /**
  * Checks the current authentication status and updates the UI.
@@ -246,7 +255,8 @@ document.addEventListener('click', handleClickOutside);
 function checkStatus() {
   errorMessage.textContent = '';
   infoMessage.textContent = '';
-  chrome.runtime.sendMessage({ action: "clearBadge" });
+  // Don't clear badge here necessarily, let background manage it
+  // chrome.runtime.sendMessage({ action: "clearBadge" });
 
   chrome.runtime.sendMessage({ action: 'getStatus' }, (response) => {
     if (chrome.runtime.lastError) {
@@ -256,6 +266,8 @@ function checkStatus() {
     }
 
     if (response?.loggedIn) {
+      // If logged in, ask background to clear the badge if the popup is opened
+      chrome.runtime.sendMessage({ action: "clearBadge" });
       showLoggedInState(response.latestCodeData);
     } else {
       showLoggedOutState();
@@ -265,6 +277,6 @@ function checkStatus() {
 
 // Initial check when the popup is opened
 document.addEventListener('DOMContentLoaded', () => {
-    checkStatus();
-    // updateThemeButton(); // Set initial theme button state if complex icons are used
+  checkStatus();
 });
+// --- END OF FILE popup.js ---
