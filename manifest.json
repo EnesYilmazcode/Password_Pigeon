@@ -16,6 +16,12 @@
     "https://www.googleapis.com/",
     "<all_urls>"
   ],
+  "oauth2": {
+    "client_id": "150823808984-d7pcq090c9r3743m2506msjtdssthl7u.apps.googleusercontent.com",
+    "scopes": [
+      "https://www.googleapis.com/auth/gmail.readonly"
+    ]
+  },
   "background": {
     "service_worker": "background.js",
     "type": "module"

@@ -1,9 +1,11 @@
 // --- START OF FILE background.js ---
 
-import { ensureAuthToken, removeToken, checkUserLoggedIn } from './auth.js'; // Use more functions from auth.js
+import { ensureAuthToken, removeToken, checkUserLoggedIn, initializeAuth } from './auth.js'; // Use more functions from auth.js
 import { findLatestCode } from './gmail.js'; // Use gmail module
 
 // --- Constants ---
+const GMAIL_API_URL = 'https://www.googleapis.com/gmail/v1/users/me/messages';
+const MAX_MESSAGES_TO_CHECK = 5;
 const CHECK_ALARM_NAME = 'checkForCodeAlarm';
 const CHECK_INTERVAL_MINUTES = 0.25; // Check every 15 seconds
 const NOTIFICATION_PREFIX = 'password-pigeon-code-'; // Prefix for notification IDs
@@ -11,6 +13,7 @@ const NOTIFICATION_PREFIX = 'password-pigeon-code-'; // Prefix for notification 
 // --- State ---
 let isChecking = false; // Prevent overlapping checks
 let lastNotifiedCode = null; // Store the last code we showed a notification for
+let notificationsEnabled = true; // Default to enabled
 
 const ICONS = {
   inactive: {
@@ -25,38 +28,107 @@ const ICONS = {
   }
 };
 
+// Load notification state on startup
+chrome.storage.local.get('notificationsEnabled', (data) => {
+  notificationsEnabled = data.notificationsEnabled !== false; // Default to true if not set
+  console.log('Notifications enabled:', notificationsEnabled);
+});
+
 // --- Initialization ---
-chrome.runtime.onInstalled.addListener(async () => {
-  console.log("Password Pigeon installed/updated.");
-  await initializeState();
-  startAlarm();
+chrome.runtime.onInstalled.addListener(async (details) => {
+  console.log(`Password Pigeon ${details.reason} (v${chrome.runtime.getManifest().version})`);
+  
+  try {
+    // Initialize auth system first
+    await initializeAuth();
+    
+    // Then initialize our extension state
+    await initializeState();
+    
+    // Start the monitoring alarm
+    startAlarm();
+    
+    console.log("Initialization complete");
+  } catch (error) {
+    console.error("Initialization failed:", error);
+  }
 });
 
 chrome.runtime.onStartup.addListener(async () => {
-    console.log("Password Pigeon starting up.");
+  console.log("Password Pigeon starting up after browser restart");
+  
+  try {
+    // Reinitialize auth (checks for existing refresh token)
+    await initializeAuth();
+    
+    // Restore state
     await initializeState();
-    startAlarm(); // Ensure alarm is running on browser start
+    
+    // Ensure alarm is running
+    startAlarm();
+    
+    // Check if user is logged in and start checking for codes
+    const isLoggedIn = await checkUserLoggedIn();
+    if (isLoggedIn) {
+      console.log("User is logged in, starting code checks");
+      // Trigger an immediate check
+      checkForCode().catch(console.error);
+    } else {
+      console.log("User is not logged in");
+      // Make sure we're not showing any active state
+      updateIcon(false);
+    }
+    
+    console.log("Startup initialization complete");
+  } catch (error) {
+    console.error("Startup initialization failed:", error);
+    // Ensure we're in a clean state even if initialization fails
+    updateIcon(false);
+  }
 });
 
 async function initializeState() {
-    console.log("Initializing state...");
+  console.log("Initializing extension state...");
+  
+  try {
     // Restore last notified code from storage
-    const data = await chrome.storage.local.get(['lastNotifiedCode']);
+    const data = await chrome.storage.local.get([
+      'lastNotifiedCode',
+      'latestCodeData',
+      'refreshToken'
+    ]);
+    
     lastNotifiedCode = data.lastNotifiedCode || null;
     console.log("Restored last notified code:", lastNotifiedCode);
+    
     // Set initial icon based on login status
     const loggedIn = await checkUserLoggedIn();
     updateIcon(loggedIn);
+    
+    // If logged in but no alarm is running, start one
+    if (loggedIn) {
+      chrome.alarms.get(CHECK_ALARM_NAME, (alarm) => {
+        if (!alarm) {
+          console.log("No active alarm found for logged-in user, starting one");
+          startAlarm();
+        }
+      });
+    }
+    
+    console.log("State initialization complete");
+  } catch (error) {
+    console.error("State initialization error:", error);
+    throw error;
+  }
 }
-
 // --- Icon Management ---
 function updateIcon(isLoggedIn) {
   const path = isLoggedIn ? ICONS.active : ICONS.inactive;
   chrome.action.setIcon({ path }, () => {
     if (chrome.runtime.lastError) {
-      // console.error("Error setting icon:", chrome.runtime.lastError.message);
+      console.error("Error setting icon:", chrome.runtime.lastError.message);
     } else {
-      // console.log("Icon updated, loggedIn:", isLoggedIn);
+      console.log("Icon updated, loggedIn:", isLoggedIn);
     }
   });
 }
@@ -106,6 +178,7 @@ async function checkForCode() {
 
   try {
     // Ensure we have a valid token non-interactively first
+    console.log("Ensuring auth token (non-interactive)...");
     const token = await ensureAuthToken(false); // false = non-interactive
     if (!token) {
       console.log("Not logged in or token invalid, cannot check for codes.");
@@ -113,9 +186,11 @@ async function checkForCode() {
       isChecking = false;
       return;
     }
+    console.log("Got valid token, updating icon to active state");
     updateIcon(true); // Token valid, show active icon
 
     // Find the latest code using the gmail module
+    console.log("Finding latest code...");
     const latestCodeData = await findLatestCode(token);
 
     if (latestCodeData && latestCodeData.code) {
@@ -142,6 +217,7 @@ async function checkForCode() {
   } catch (error) {
     console.error("Error during code check:", error);
     if (error.message.includes("Authentication failed") || error.message.includes("Unauthorized")) {
+        console.log("Authentication error detected, updating icon to inactive state");
         updateIcon(false); // Update icon if auth specifically failed
         await removeToken(); // Clear the bad token
     }
@@ -153,43 +229,41 @@ async function checkForCode() {
 }
 
 async function showNotification(code) {
-    const notificationId = `${NOTIFICATION_PREFIX}${code}-${Date.now()}`; // Unique ID including timestamp prevents issues with identical codes
-    try {
-        // Check for permission (though it should be requested on install/update)
-        const hasPermission = await new Promise(resolve => {
-            chrome.permissions.contains({ permissions: ['notifications'] }, resolve);
-        });
+  if (!notificationsEnabled) {
+    console.log('Notifications disabled, skipping notification for code:', code);
+    return;
+  }
 
-        if (!hasPermission) {
-            console.warn("Notification permission not granted. Cannot show notification.");
-            // Maybe request it again? chrome.permissions.request({permissions: ['notifications']});
-            return;
+  const notificationId = `${NOTIFICATION_PREFIX}${code}-${Date.now()}`;
+  try {
+    chrome.permissions.contains({ permissions: ['notifications'] }, (hasPermission) => {
+      if (!hasPermission) {
+        console.warn("Notification permission not granted.");
+        return;
+      }
+
+      chrome.storage.local.set({ [notificationId]: code });
+
+      chrome.notifications.create(notificationId, {
+        type: "basic",
+        iconUrl: chrome.runtime.getURL(ICONS.active["128"]),
+        title: "Password Pigeon Found Code",
+        message: `Code: ${code}\nClick here to copy.`,
+        priority: 2,
+        requireInteraction: false
+      }, (createdId) => {
+        if (chrome.runtime.lastError) {
+          console.error("Notification creation error:", chrome.runtime.lastError.message);
+          chrome.storage.local.remove(notificationId);
+        } else {
+          console.log("Notification created:", createdId);
         }
-
-        // Store the code associated with this specific notification ID for the click handler
-        await chrome.storage.local.set({ [notificationId]: code });
-
-        chrome.notifications.create(notificationId, {
-            type: "basic",
-            iconUrl: chrome.runtime.getURL(ICONS.active["128"]), // Use active icon
-            title: "Password Pigeon Found Code",
-            message: `Code: ${code}\nClick here to copy.`,
-            priority: 2, // High priority
-            requireInteraction: false // Optional: Keep notification until dismissed
-        }, (createdId) => {
-            if (chrome.runtime.lastError) {
-                console.error("Notification creation error:", chrome.runtime.lastError.message);
-                // Clean up storage if creation failed
-                 chrome.storage.local.remove(notificationId);
-            } else {
-                console.log("Notification created:", createdId);
-            }
-        });
-    } catch (error) {
-        console.error("Error showing notification:", error);
-        // Clean up storage if there was an error before creating
-        chrome.storage.local.remove(notificationId);
-    }
+      });
+    });
+  } catch (error) {
+    console.error("Error showing notification:", error);
+    chrome.storage.local.remove(notificationId);
+  }
 }
 
 // --- Notification Click Handler (Uses Scripting Fallback) ---
@@ -338,11 +412,24 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 
   if (request.action === "getStatus") {
     // Use checkUserLoggedIn for consistency, get latest code data too
+    console.log("Background received getStatus request, checking login status");
     Promise.all([
         checkUserLoggedIn(),
         chrome.storage.local.get('latestCodeData')
     ]).then(([loggedIn, data]) => {
+        console.log("Login status check result:", loggedIn);
         updateIcon(loggedIn); // Sync icon state with actual status
+        
+        // If logged in, make sure we have a running alarm
+        if (loggedIn) {
+          chrome.alarms.get(CHECK_ALARM_NAME, (alarm) => {
+            if (!alarm) {
+              console.log("No active alarm found during status check, starting one");
+              startAlarm();
+            }
+          });
+        }
+        
         sendResponse({
             loggedIn: loggedIn,
             latestCodeData: data.latestCodeData || null
@@ -359,6 +446,11 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     clearBadge();
     sendResponse({ success: true });
     // No return true needed as it's synchronous
+  }
+
+  if (request.action === 'setNotifications') {
+    notificationsEnabled = request.enabled;
+    console.log('Notifications ' + (notificationsEnabled ? 'enabled' : 'disabled'));
   }
 
   // REMOVED: copyCode action - popup handles its own copy now

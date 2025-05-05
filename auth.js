@@ -1,133 +1,300 @@
-// --- Constants ---
-const CLIENT_ID = '150823808984-d7pcq090c9r3743m2506msjtdssthl7u.apps.googleusercontent.com'; // Replace with your actual Client ID if different
+// --- START OF FILE auth.js ---
+
+import { CLIENT_ID, CLIENT_SECRET } from './secrets.js';
+
+const DEBUG = true;
 const SCOPES = 'https://www.googleapis.com/auth/gmail.readonly';
-const TOKEN_EXPIRY_MARGIN = 5 * 60 * 1000; // Refresh token 5 minutes before nominal expiry (Google tokens last 60 mins)
+const TOKEN_EXPIRY_MARGIN = 5 * 60 * 1000; // 5 minutes
+const MAX_TOKEN_AGE = 60 * 60 * 1000; // 1 hour
+const REFRESH_ALARM_NAME = 'proactiveTokenRefresh';
 
-let currentAuthToken = null; // In-memory cache
+let currentAuthToken = null;
 
-/**
- * Retrieves the current valid auth token, attempting to refresh or re-authenticate if necessary.
- * @param {boolean} interactive - Whether to allow interactive login prompt.
- * @returns {Promise<string|null>} The auth token or null if authentication fails.
- */
-export async function ensureAuthToken(interactive = true) {
-    const { authToken: storedToken, authTimestamp } = await chrome.storage.local.get(['authToken', 'authTimestamp']);
-    const now = Date.now();
 
-    if (storedToken && authTimestamp && (now - authTimestamp < (60 * 60 * 1000 - TOKEN_EXPIRY_MARGIN))) {
-        console.log("Using stored, valid token.");
-        currentAuthToken = storedToken;
-        return currentAuthToken;
+class AuthError extends Error {
+  constructor(message, isPermanent = false) {
+    super(message);
+    this.name = 'AuthError';
+    this.isPermanent = isPermanent;
+  }
+}
+
+class NetworkError extends Error {
+  constructor(message) {
+    super(message);
+    this.name = 'NetworkError';
+  }
+}
+
+export async function initializeAuth() {
+  if (DEBUG) console.log("Initializing auth system");
+  try {
+    const stored = await chrome.storage.local.get(['authToken', 'authTimestamp', 'refreshToken']);
+    if (stored.authToken && stored.refreshToken) {
+      currentAuthToken = stored.authToken;
     }
+    await setupProactiveRefresh();
+  } catch (e) {
+    console.error("Initialization failed:", e);
+  }
+}
 
-    console.log("Stored token missing, expired, or nearing expiry. Attempting non-interactive refresh.");
+async function setupProactiveRefresh() {
+  const { refreshToken } = await chrome.storage.local.get('refreshToken');
+  if (refreshToken) {
+    scheduleNextRefresh();
+  }
+}
+
+function scheduleNextRefresh() {
+  chrome.alarms.create(REFRESH_ALARM_NAME, {
+    delayInMinutes: (MAX_TOKEN_AGE - TOKEN_EXPIRY_MARGIN) / (60 * 1000) - 1
+  });
+  if (DEBUG) console.log("Scheduled next token refresh");
+}
+
+chrome.alarms.onAlarm.addListener(async (alarm) => {
+  if (alarm.name === REFRESH_ALARM_NAME) {
+    if (DEBUG) console.log("Token refresh alarm triggered");
     try {
-        const token = await launchOAuthFlow(false); // Try non-interactive first
-        console.log("Non-interactive token fetch successful.");
-        currentAuthToken = token;
-        await chrome.storage.local.set({ authToken: token, authTimestamp: Date.now() });
-        return currentAuthToken;
-    } catch (error) {
-        console.warn("Non-interactive auth failed:", error.message);
-        if (interactive) {
-            console.log("Attempting interactive auth.");
-            try {
-                const token = await launchOAuthFlow(true); // Fallback to interactive
-                console.log("Interactive token fetch successful.");
-                currentAuthToken = token;
-                await chrome.storage.local.set({ authToken: token, authTimestamp: Date.now() });
-                return currentAuthToken;
-            } catch (interactiveError) {
-                console.error("Interactive auth failed:", interactiveError.message);
-                await removeToken(); // Clear any potentially invalid stored token
-                return null;
-            }
-        } else {
-            console.log("Interactive auth skipped.");
-            await removeToken();
-            return null;
-        }
+      await ensureAuthToken(false);
+      scheduleNextRefresh();
+    } catch (e) {
+      console.error("Proactive refresh failed:", e);
     }
-}
+  }
+});
 
-/**
- * Initiates the Google OAuth flow.
- * @param {boolean} interactive - Whether to prompt the user for login/consent.
- * @returns {Promise<string>} The access token.
- * @throws {Error} If authentication fails or is cancelled.
- */
-async function launchOAuthFlow(interactive) {
-    return new Promise((resolve, reject) => {
-        const redirectUri = chrome.identity.getRedirectURL();
-        if (!redirectUri) {
-            return reject(new Error("Unable to get redirect URL. Check extension ID configuration."));
-        }
+export async function ensureAuthToken(interactive = true) {
+  try {
+    console.log("ensureAuthToken called, interactive:", interactive);
 
-        const authUrl = new URL('https://accounts.google.com/o/oauth2/auth');
-        authUrl.searchParams.set('client_id', CLIENT_ID);
-        authUrl.searchParams.set('redirect_uri', redirectUri);
-        authUrl.searchParams.set('response_type', 'token');
-        authUrl.searchParams.set('scope', SCOPES);
-        // Consider adding 'prompt: consent' or 'prompt: select_account' if needed, especially for interactive=true
+    if (currentAuthToken) {
+      console.log("Using existing token from memory");
+      return currentAuthToken;
+    }
 
-        chrome.identity.launchWebAuthFlow({ url: authUrl.toString(), interactive }, (redirectedTo) => {
-            if (chrome.runtime.lastError || !redirectedTo) {
-                return reject(chrome.runtime.lastError || new Error('Auth flow failed or was cancelled by the user.'));
-            }
-
-            try {
-                // Use URL constructor for robust parsing
-                const url = new URL(redirectedTo);
-                const params = new URLSearchParams(url.hash.substring(1)); // Get params from hash fragment
-                const accessToken = params.get('access_token');
-                const error = params.get('error');
-
-                if (error) {
-                    return reject(new Error(`OAuth error: ${error}`));
-                }
-
-                if (accessToken) {
-                    resolve(accessToken);
-                } else {
-                    reject(new Error('Authentication successful, but no access token received in redirect.'));
-                }
-            } catch (e) {
-                console.error("Error parsing redirect URL:", redirectedTo, e);
-                reject(new Error('Failed to parse OAuth redirect URL.'));
-            }
-        });
-    });
-}
-
-/**
- * Removes the stored authentication token and clears the in-memory cache.
- * @returns {Promise<void>}
- */
-export async function removeToken() {
-    currentAuthToken = null;
-    await chrome.storage.local.remove(['authToken', 'authTimestamp']);
-    console.log("Auth token removed.");
-}
-
-/**
- * Checks if the user is currently considered logged in (valid token exists).
- * @returns {Promise<boolean>}
- */
-export async function checkUserLoggedIn() {
-    const { authToken: storedToken, authTimestamp } = await chrome.storage.local.get(['authToken', 'authTimestamp']);
+    const { authToken, authTimestamp, refreshToken } = await chrome.storage.local.get(['authToken', 'authTimestamp', 'refreshToken']);
     const now = Date.now();
-    const isValid = !!(storedToken && authTimestamp && (now - authTimestamp < (60 * 60 * 1000 - TOKEN_EXPIRY_MARGIN)));
-    if (isValid) {
-        currentAuthToken = storedToken; // Update cache if valid
+
+    console.log("Stored data:", { 
+      hasAuthToken: !!authToken, 
+      hasAuthTimestamp: !!authTimestamp, 
+      hasRefreshToken: !!refreshToken,
+      tokenAge: authTimestamp ? (now - authTimestamp) / 1000 : 'N/A'
+    });
+
+    if (authToken && authTimestamp && (now - authTimestamp < (MAX_TOKEN_AGE - TOKEN_EXPIRY_MARGIN))) {
+      console.log("Using valid stored token");
+      currentAuthToken = authToken;
+      return currentAuthToken;
     }
-    return isValid;
+
+    if (refreshToken) {
+      try {
+        console.log("Attempting to refresh token...");
+        const newAccessToken = await refreshAccessToken(refreshToken);
+        currentAuthToken = newAccessToken;
+        await chrome.storage.local.set({
+          authToken: newAccessToken,
+          authTimestamp: Date.now()
+        });
+        console.log("Successfully refreshed token");
+        return currentAuthToken;
+      } catch (refreshError) {
+        console.error("Error refreshing token:", refreshError);
+        if (isTokenInvalidError(refreshError)) {
+          console.warn("Refresh token invalid, removing");
+          await removeToken();
+          throw new AuthError("Session expired", true);
+        }
+        throw new NetworkError("Refresh failed: " + refreshError.message);
+      }
+    }
+
+    if (!interactive) {
+      console.log("No valid token and non-interactive mode, cannot authenticate");
+      throw new AuthError("Authentication required", true);
+    }
+
+    return await attemptAuthenticationFlow(interactive);
+
+  } catch (error) {
+    console.error("Error ensuring auth token:", error);
+    if (error instanceof AuthError && error.isPermanent) {
+      await removeToken();
+    }
+    throw error;
+  }
 }
 
-/**
- * Gets the current token from cache - useful for synchronous checks after ensuring it's valid.
- * Do not rely on this without calling ensureAuthToken first.
- * @returns {string|null}
- */
-export function getCurrentToken() {
+async function attemptAuthenticationFlow(interactive) {
+  try {
+    if (DEBUG) console.log(`Attempting ${interactive ? 'interactive' : 'silent'} auth flow`);
+    const authCode = await launchOAuthFlow(interactive);
+    const tokens = await exchangeCodeForTokens(authCode);
+    currentAuthToken = tokens.accessToken;
+    await storeTokens(tokens);
+    if (DEBUG) console.log("Authentication flow completed successfully");
     return currentAuthToken;
+  } catch (error) {
+    console.error(`${interactive ? 'Interactive' : 'Non-interactive'} auth failed:`, error);
+    throw error;
+  }
 }
+
+async function storeTokens(tokens) {
+  const storageData = {
+    authToken: tokens.accessToken,
+    authTimestamp: Date.now()
+  };
+
+  if (tokens.refreshToken) {
+    if (DEBUG) console.log("Storing new refresh token");
+    storageData.refreshToken = tokens.refreshToken;
+  } else {
+    const existing = await chrome.storage.local.get('refreshToken');
+    if (existing.refreshToken) {
+      if (DEBUG) console.log("Keeping existing refresh token");
+      storageData.refreshToken = existing.refreshToken;
+    }
+  }
+
+  await chrome.storage.local.set(storageData);
+  if (DEBUG) console.log("Tokens stored successfully");
+  if (storageData.refreshToken) scheduleNextRefresh();
+}
+
+async function launchOAuthFlow(interactive) {
+  return new Promise((resolve, reject) => {
+    const redirectUri = chrome.identity.getRedirectURL();
+    if (DEBUG) console.log("OAuth redirect URI:", redirectUri);
+
+    const authUrl = new URL('https://accounts.google.com/o/oauth2/v2/auth');
+    authUrl.searchParams.set('client_id', CLIENT_ID);
+    authUrl.searchParams.set('redirect_uri', redirectUri);
+    authUrl.searchParams.set('response_type', 'code');
+    authUrl.searchParams.set('scope', SCOPES);
+    authUrl.searchParams.set('access_type', 'offline');
+    authUrl.searchParams.set('prompt', 'consent');
+
+    chrome.identity.launchWebAuthFlow({ url: authUrl.toString(), interactive }, (redirectedToUrl) => {
+      if (chrome.runtime.lastError) {
+        console.error("Chrome auth flow error:", chrome.runtime.lastError);
+        return reject(chrome.runtime.lastError);
+      }
+      try {
+        const url = new URL(redirectedToUrl);
+        const code = url.searchParams.get('code');
+        if (code) {
+          if (DEBUG) console.log("Received auth code");
+          resolve(code);
+        } else {
+          console.error("No authorization code in redirect");
+          reject(new Error('No authorization code'));
+        }
+      } catch (e) {
+        console.error("Failed to parse redirect URL:", e);
+        reject(new Error('Failed to parse redirect URL'));
+      }
+    });
+  });
+}
+
+async function exchangeCodeForTokens(code) {
+  if (DEBUG) console.log("Exchanging auth code for tokens");
+  const tokenEndpoint = 'https://oauth2.googleapis.com/token';
+  const redirectUri = chrome.identity.getRedirectURL();
+
+  const formData = new URLSearchParams({
+    client_id: CLIENT_ID,
+    client_secret: CLIENT_SECRET,
+    code,
+    grant_type: 'authorization_code',
+    redirect_uri: redirectUri
+  });
+
+  const response = await fetch(tokenEndpoint, {
+    method: 'POST',
+    body: formData,
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
+  });
+
+  const data = await response.json();
+  if (!response.ok) {
+    console.error("Token exchange failed:", data);
+    throw new Error(data.error_description || 'Token exchange failed');
+  }
+
+  if (DEBUG) console.log("Token exchange successful");
+  return {
+    accessToken: data.access_token,
+    refreshToken: data.refresh_token || null
+  };
+}
+
+async function refreshAccessToken(refreshToken) {
+  if (DEBUG) console.log("Refreshing access token");
+  const response = await fetch('https://oauth2.googleapis.com/token', {
+    method: 'POST',
+    body: new URLSearchParams({
+      client_id: CLIENT_ID,
+      client_secret: CLIENT_SECRET,
+      refresh_token: refreshToken,
+      grant_type: 'refresh_token'
+    }),
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
+  });
+
+  const data = await response.json();
+  if (!response.ok) {
+    console.error("Token refresh failed:", data);
+    throw new Error(data.error_description || 'Token refresh failed');
+  }
+
+  if (DEBUG) console.log("Token refresh successful");
+  return data.access_token;
+}
+
+function isTokenInvalidError(error) {
+  return error.message.includes("invalid_grant") || error.status === 400 || error.status === 401;
+}
+
+export async function removeToken() {
+  if (DEBUG) console.log("Removing tokens from storage");
+  currentAuthToken = null;
+  await chrome.storage.local.remove(['authToken', 'authTimestamp', 'refreshToken']);
+  chrome.alarms.clear(REFRESH_ALARM_NAME);
+}
+
+export async function fullLogout() {
+  if (DEBUG) console.log("Performing full logout");
+  await removeToken();
+}
+
+export async function checkUserLoggedIn() {
+  try {
+    console.log("checkUserLoggedIn called");
+    const { refreshToken } = await chrome.storage.local.get('refreshToken');
+    if (refreshToken) {
+      try {
+        await ensureAuthToken(false);
+        console.log("User is logged in with valid token");
+        return true;
+      } catch (error) {
+        console.error("Silent login check failed:", error);
+        return false;
+      }
+    }
+    return false;
+  } catch (error) {
+    console.error("Error checking login status:", error);
+    return false;
+  }
+}
+
+export function getCurrentToken() {
+  return currentAuthToken;
+}
+
+// --- END OF FILE auth.js ---

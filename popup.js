@@ -20,8 +20,10 @@ const settingsPanel = document.getElementById('settings-panel');
 const aboutButton = document.getElementById('about-button'); // Assuming you add functionality later
 const themeToggleButton = document.getElementById('theme-toggle-button');
 const logoutButton = document.getElementById('logout-button'); // Moved reference
+const websiteButton = document.getElementById('website-button'); // Added website button reference
 
 let currentCode = null;
+let isAuthInProgress = false; // Flag to prevent double auth attempts
 
 // --- Theme Setup Based on System ---
 let storedTheme = localStorage.getItem('theme');
@@ -143,7 +145,6 @@ async function copyCodeToClipboard() {
       setTimeout(() => {
         copyIndicator.classList.remove('show-copy-indicator');
       }, 1500);
-      showInfo("Code copied to clipboard!"); // Optional feedback
       console.log("Code copied successfully from popup:", currentCode);
     } catch (err) {
       console.error("Popup copy failed:", err);
@@ -185,10 +186,17 @@ function handleClickOutside(event) {
   }
 }
 
-// --- Event Listeners ---
-
-// Login Button
-loginButton.addEventListener('click', () => {
+/**
+ * Attempts to authenticate the user, handling duplicative clicks.
+ */
+function attemptLogin() {
+  // Prevent duplicate login attempts
+  if (isAuthInProgress) {
+    console.log("Auth already in progress, ignoring click");
+    return;
+  }
+  
+  isAuthInProgress = true;
   showInfo("Attempting sign in...");
   loginButton.disabled = true;
   loginButton.textContent = 'Signing In...';
@@ -196,6 +204,8 @@ loginButton.addEventListener('click', () => {
   chrome.runtime.sendMessage({ action: 'login' }, (response) => {
     loginButton.disabled = false;
     loginButton.textContent = 'Sign In with Google';
+    isAuthInProgress = false;
+    
     if (response?.success) {
       showInfo("Sign in successful! Checking status...");
       setTimeout(checkStatus, 500);
@@ -204,7 +214,12 @@ loginButton.addEventListener('click', () => {
       showError(response?.error || 'Login failed.');
     }
   });
-});
+}
+
+// --- Event Listeners ---
+
+// Login Button
+loginButton.addEventListener('click', attemptLogin);
 
 // Logout Button (inside panel)
 logoutButton.addEventListener('click', () => {
@@ -239,9 +254,18 @@ settingsButton.addEventListener('click', (event) => {
 });
 
 // About Button (inside panel) - Add functionality later if needed
-aboutButton.addEventListener('click', () => {
-  console.log("About button clicked");
-  alert("Password Pigeon v0.1.0\nCreated to fetch 2FA codes."); // Simple alert for now
+if (aboutButton) {
+  aboutButton.addEventListener('click', () => {
+    console.log("About button clicked");
+    alert("Password Pigeon v0.1.0\nCreated to fetch 2FA codes."); // Simple alert for now
+    settingsPanel.classList.remove('show'); // Close panel
+    document.body.classList.remove('settings-panel-visible');
+  });
+}
+
+// Website Button (inside panel)
+websiteButton.addEventListener('click', () => {
+  chrome.tabs.create({ url: 'https://password-pigeon.web.app' });
   settingsPanel.classList.remove('show'); // Close panel
   document.body.classList.remove('settings-panel-visible');
 });
@@ -253,30 +277,113 @@ document.addEventListener('click', handleClickOutside);
  * Checks the current authentication status and updates the UI.
  */
 function checkStatus() {
+  console.log("Checking authentication status...");
   errorMessage.textContent = '';
   infoMessage.textContent = '';
-  // Don't clear badge here necessarily, let background manage it
-  // chrome.runtime.sendMessage({ action: "clearBadge" });
-
+  
+  // Show a loading state while checking
+  authStatus.textContent = "Checking authentication...";
+  loginButton.style.display = 'none';
+  
   chrome.runtime.sendMessage({ action: 'getStatus' }, (response) => {
     if (chrome.runtime.lastError) {
+      console.error("Error connecting to background:", chrome.runtime.lastError);
       showLoggedOutState("Error connecting.");
       showError("Try reloading the extension.");
       return;
     }
+    
+    console.log("Status response:", response);
 
     if (response?.loggedIn) {
+      console.log("User is logged in, showing logged in state");
       // If logged in, ask background to clear the badge if the popup is opened
       chrome.runtime.sendMessage({ action: "clearBadge" });
       showLoggedInState(response.latestCodeData);
     } else {
+      console.log("User is not logged in, showing login button");
+      // Handle case where the user needs to log in
       showLoggedOutState();
     }
   });
 }
 
-// Initial check when the popup is opened
+// Initial setup when the popup is opened
 document.addEventListener('DOMContentLoaded', () => {
-  checkStatus();
+  console.log("Popup opened, checking status");
+  
+  // Show a loading state while checking
+  authStatus.textContent = "Checking authentication...";
+  loginButton.style.display = 'none';
+  
+  // Add a small delay to ensure background script is ready
+  setTimeout(() => {
+    checkStatus();
+  }, 100);
 });
+
+// Add event listener for the new copy button
+const copyButton = document.getElementById('copy-button');
+if (copyButton) {
+  copyButton.addEventListener('click', () => {
+    const codeText = document.getElementById('code-text').textContent;
+    if (codeText && codeText !== 'No code found yet.') {
+      copyToClipboard(codeText);
+    }
+  });
+}
+
+/**
+ * Copies text to clipboard and shows confirmation
+ * @param {string} text - The text to copy
+ */
+function copyToClipboard(text) {
+  navigator.clipboard.writeText(text).then(() => {
+    // Show the copy indicator
+    const copyIndicator = document.querySelector('.copy-indicator');
+    copyIndicator.classList.add('visible');
+    
+    // Hide the indicator after 2 seconds
+    setTimeout(() => {
+      copyIndicator.classList.remove('visible');
+    }, 2000);
+    
+    console.log('Code copied to clipboard:', text);
+  }).catch(err => {
+    console.error('Failed to copy code:', err);
+  });
+}
+
+// Initialize notification toggle state
+let notificationsEnabled = true; // Default to enabled
+
+// Load notification state
+chrome.storage.local.get('notificationsEnabled', (data) => {
+  notificationsEnabled = data.notificationsEnabled !== false; // Default to true if not set
+  updateNotificationToggleUI();
+});
+
+// Add notification toggle button handler
+document.getElementById('notifications-toggle-button').addEventListener('click', () => {
+  notificationsEnabled = !notificationsEnabled;
+  chrome.storage.local.set({ notificationsEnabled });
+  updateNotificationToggleUI();
+  
+  // Send message to background script to update notification state
+  chrome.runtime.sendMessage({ 
+    action: 'setNotifications',
+    enabled: notificationsEnabled 
+  });
+});
+
+function updateNotificationToggleUI() {
+  const button = document.getElementById('notifications-toggle-button');
+  if (notificationsEnabled) {
+    button.classList.remove('disabled');
+    button.title = 'Disable Notifications';
+  } else {
+    button.classList.add('disabled');
+    button.title = 'Enable Notifications';
+  }
+}
 // --- END OF FILE popup.js ---

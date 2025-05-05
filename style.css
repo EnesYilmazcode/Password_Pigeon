@@ -1,6 +1,6 @@
 :root {
-  --primary-color: #4f7df9;
-  --primary-hover: #3e65d2;
+  --primary-color: #f87c4c;
+  --primary-hover: #e66e40;
   --background: #ffffff;
   --card-bg: #f5f7fb;
   --text-primary: #2c3e50;
@@ -10,6 +10,7 @@
   --border-radius: 12px;
   --box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
   --transition: all 0.2s ease;
+  --header-bg: #2c4678;
 
   /* Light theme default variables */
   --bg-color: #ffffff;
@@ -24,8 +25,8 @@
 }
 
 [data-theme="dark"] {
-  --primary-color: #5e8bff;
-  --primary-hover: #4972e6;
+  --primary-color: #f87c4c;
+  --primary-hover: #e66e40;
   --bg-color: #1a1a1a;
   --card-background: #2a2a2a;
   --text-color: #f0f0f0;
@@ -35,6 +36,8 @@
   --status-active: #10B981;
   --settings-panel-bg: #2e2e2e;
   --settings-item-hover-bg: #3a3a3a;
+  --header-bg: #1f3361;
+  --box-shadow: 0 8px 24px rgba(0, 0, 150, 0.2);
 }
 
 * {
@@ -69,10 +72,13 @@ body {
   align-items: center;
   justify-content: space-between; /* Space between content and settings */
   margin-bottom: 20px;
-  padding-bottom: 16px;
-  border-bottom: 1px solid var(--border-color);
+  padding: 16px; /* Add padding all around */
+  background-color: var(--header-bg); /* Navy blue background */
+  color: white; /* White text for header */
+  border-bottom: none; /* Remove the border */
   transition: var(--transition);
   position: relative; /* Needed for settings panel positioning */
+  margin: -20px -20px 20px -20px; /* Extend to edges of container */
 }
 
 .header-content {
@@ -157,7 +163,7 @@ h1 {
   font-size: 18px;
   font-weight: 600;
   margin: 0;
-  color: var(--text-color);
+  color: white; /* White text for header */
   transition: var(--transition);
   white-space: nowrap; /* Prevent wrapping */
 }
@@ -193,7 +199,7 @@ h2 {
 }
 
 .button {
-  background: linear-gradient(90deg, var(--primary-color), var(--primary-hover));
+  background: var(--primary-color); /* Solid orange */
   color: white;
   border: none;
   padding: 10px 24px;
@@ -202,12 +208,13 @@ h2 {
   cursor: pointer;
   transition: var(--transition);
   font-size: 14px;
-  box-shadow: 0 4px 8px rgba(79, 125, 249, 0.2);
+  box-shadow: 0 4px 8px rgba(248, 124, 76, 0.2); /* Orange shadow */
 }
 
 .button:hover {
+  background: var(--primary-hover); /* Darker orange on hover */
   transform: translateY(-2px);
-  box-shadow: 0 6px 12px rgba(79, 125, 249, 0.3);
+  box-shadow: 0 6px 12px rgba(248, 124, 76, 0.3); /* Deeper orange shadow */
 }
 
 .button:active { transform: translateY(0); }
@@ -217,21 +224,21 @@ h2 {
 .icon-button {
   background: transparent;
   border: none;
-  color: var(--text-light);
+  color: white; /* White icon in header */
   cursor: pointer;
-  padding: 8px; /* Keep padding consistent */
-  border-radius: 50%; /* Make it circular */
+  padding: 8px;
+  border-radius: 50%;
   transition: var(--transition);
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 36px; /* Fixed size */
-  height: 36px; /* Fixed size */
+  width: 36px;
+  height: 36px;
 }
 
 .icon-button:hover {
-  background-color: var(--settings-item-hover-bg);
-  color: var(--primary-color);
+  background-color: rgba(255, 255, 255, 0.2); /* Semi-transparent white on hover */
+  color: white;
 }
 
 /* --- Settings Panel Styling --- */
@@ -280,6 +287,15 @@ h2 {
   color: var(--text-light); /* Icon color */
 }
 
+/* Special style for the website button */
+#website-button svg {
+  transition: transform 0.2s ease;
+}
+
+#website-button:hover svg {
+  color: var(--primary-color); /* Use primary color on hover */
+}
+
 .settings-item:hover {
   background-color: var(--settings-item-hover-bg);
 }
@@ -307,7 +323,6 @@ h2 {
   padding: 20px;
   position: relative;
   box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
-  cursor: pointer;
   transition: var(--transition);
   overflow: hidden;
   border: 1px solid var(--border-color);
@@ -315,11 +330,18 @@ h2 {
   justify-content: center;
   align-items: center;
   min-height: 70px; /* Use min-height */
+  cursor: default; /* Remove pointer cursor */
 }
 
+/* Different hover shadow based on theme */
 .code-box:hover {
-  box-shadow: 0 5px 10px rgba(0, 0, 0, 0.15);
-  border-color: var(--primary-color);
+  box-shadow: 0 5px 10px rgba(0, 0, 0, 0.15); /* Default light mode shadow */
+  border-color: var(--border-color); /* Don't change border on hover */
+}
+
+/* Dark theme specific shadow */
+[data-theme="dark"] .code-box:hover {
+  box-shadow: 0 5px 10px #2c4678; /* Navy blue shadow for dark mode */
 }
 
 #code-text {
@@ -330,6 +352,7 @@ h2 {
   word-break: break-all;
   text-align: center;
   transition: var(--transition);
+  letter-spacing: 2px; /* Add spacing between characters */
 }
 
 .copy-indicator {
@@ -396,6 +419,32 @@ h2 {
 
 .pulse-animation { animation: pulse-effect 2s infinite; }
 
+/* Link Container Styling */
+.link-container {
+  margin-top: 16px;
+  width: 100%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.link-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  position: relative;
+}
+
+.link-button::before {
+  content: '';
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='white'%3E%3Cpath d='M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6'%3E%3C/path%3E%3Cpolyline points='15 3 21 3 21 9'%3E%3C/polyline%3E%3Cline x1='10' y1='14' x2='21' y2='3'%3E%3C/line%3E%3C/svg%3E");
+  background-size: contain;
+  background-repeat: no-repeat;
+}
 
 /* Ensure body/html have height if needed for absolute positioning relative to viewport */
 html, body {
@@ -410,4 +459,29 @@ html, body {
 .copy-indicator.visible {
   opacity: 1;
   transform: translateY(0);
+}
+
+#notifications-toggle-button.disabled {
+  opacity: 0.5;
+}
+
+#notifications-toggle-button.disabled svg {
+  filter: grayscale(100%);
+}
+
+/* Add a small indicator dot for enabled/disabled state */
+#notifications-toggle-button::after {
+  content: '';
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background-color: var(--accent-color);
+  transition: background-color 0.2s ease;
+}
+
+#notifications-toggle-button.disabled::after {
+  background-color: #888;
 }
